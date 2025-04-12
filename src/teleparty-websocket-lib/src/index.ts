@@ -5,4 +5,11 @@ import { SessionChatMessage } from "./SessionChatMessage";
 import { MessageList } from "./MessageList";
 import { SocketEventHandler } from "./SocketEventHandler";
 
-export { CallbackFunction, SocketEventHandler, SessionChatMessage, SocketMessageTypes, MessageList, TelepartyClient };
+export type {
+  CallbackFunction,
+  SocketEventHandler,
+  SessionChatMessage,
+  SocketMessageTypes,
+  MessageList,
+};
+export { TelepartyClient };
