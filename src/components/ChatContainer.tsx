@@ -5,20 +5,20 @@ import JoinCreateRoom from './JoinCreateRoom';
 import ChatRoom from './ChatRoom';
 
 const ChatContainer: React.FC = () => {
-  const { userProfile, setUserProfile, chatState } = useChatContext();
-
-  // If the user hasn't set up their profile yet, show the profile setup screen
+  const { chatState, userProfile, setUserProfile } = useChatContext();
+  
+  
+  let currentComponent;
+  
   if (!userProfile) {
-    return <ProfileSetup onProfileSubmit={setUserProfile} />;
+    currentComponent = <ProfileSetup onProfileSubmit={setUserProfile} />;
+  } else if (!chatState.roomId) {
+    currentComponent = <JoinCreateRoom />;
+  } else {
+    currentComponent = <ChatRoom />;
   }
 
-  // If the user has a profile but isn't in a room yet, show the join/create screen
-  if (!chatState.roomId) {
-    return <JoinCreateRoom />;
-  }
-
-  // If the user is in a room, show the chat room
-  return <ChatRoom />;
+  return <div>{currentComponent}</div>;
 };
 
 export default ChatContainer; 

@@ -1,27 +1,25 @@
 import React, { useState } from 'react';
 import { useChatContext } from '../context/ChatContext';
+import { useToast } from '../context/ToastContext';
 
 const JoinCreateRoom: React.FC = () => {
   const { createRoom, joinRoom, chatState } = useChatContext();
+  const toast = useToast();
   const [roomIdInput, setRoomIdInput] = useState('');
   const [isCreating, setIsCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const handleCreateRoom = async () => {
     setIsCreating(true);
-    setError(null);
     
     try {
       const roomId = await createRoom();
       if (roomId) {
-        setSuccessMessage(`Room created! Room ID: ${roomId}`);
-        // Room ID is automatically set in context
+        toast.showSuccess(`Room created successfully!`);
       } else {
-        setError('Failed to create room. Please try again.');
+        toast.showError('Failed to create room. Please try again.');
       }
     } catch (err) {
-      setError('An error occurred while creating the room.');
+      toast.showError('An error occurred while creating the room.');
       console.error(err);
     } finally {
       setIsCreating(false);
@@ -29,41 +27,27 @@ const JoinCreateRoom: React.FC = () => {
   };
 
   const handleJoinRoom = () => {
-    setError(null);
-    
     if (!roomIdInput.trim()) {
-      setError('Please enter a room ID');
+      toast.showWarning('Please enter a room ID');
       return;
     }
     
     try {
       joinRoom(roomIdInput.trim());
-      // Room joining status will be reflected in the context
+      toast.showInfo(`Joining room: ${roomIdInput.trim()}`);
     } catch (err) {
-      setError('An error occurred while joining the room.');
+      toast.showError('An error occurred while joining the room.');
       console.error(err);
     }
   };
 
   return (
-    <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-md">
-      <h2 className="text-2xl font-bold mb-6 text-center text-purple-700">Join or Create a Chat Room</h2>
-      
-      {error && (
-        <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">
-          {error}
-        </div>
-      )}
-      
-      {successMessage && (
-        <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-md">
-          {successMessage}
-        </div>
-      )}
+    <div className="max-w-md p-6 mx-auto bg-white rounded-lg shadow-md">
+      <h2 className="mb-6 text-2xl font-bold text-center text-purple-700">Join or Create a Chat Room</h2>
       
       <div className="space-y-6">
         <div>
-          <h3 className="text-lg font-medium mb-2">Join an Existing Room</h3>
+          <h3 className="mb-2 text-lg font-medium">Join an Existing Room</h3>
           <div className="flex space-x-2">
             <input
               type="text"
@@ -75,7 +59,7 @@ const JoinCreateRoom: React.FC = () => {
             <button
               onClick={handleJoinRoom}
               disabled={!roomIdInput.trim() || chatState.isConnected === false}
-              className="px-4 py-2 bg-purple-600 text-white font-medium rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50"
+              className="px-4 py-2 font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50"
             >
               Join
             </button>
@@ -87,18 +71,18 @@ const JoinCreateRoom: React.FC = () => {
         </div>
         
         <div>
-          <h3 className="text-lg font-medium mb-2">Create a New Room</h3>
+          <h3 className="mb-2 text-lg font-medium">Create a New Room</h3>
           <button
             onClick={handleCreateRoom}
             disabled={isCreating || chatState.isConnected === false}
-            className="w-full px-4 py-2 bg-purple-600 text-white font-medium rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50"
+            className="w-full px-4 py-2 font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50"
           >
             {isCreating ? 'Creating...' : 'Create New Room'}
           </button>
         </div>
 
         {!chatState.isConnected && (
-          <div className="mt-4 p-3 bg-yellow-100 text-yellow-700 rounded-md">
+          <div className="p-3 mt-4 text-yellow-700 bg-yellow-100 rounded-md">
             Waiting for connection to be established...
           </div>
         )}

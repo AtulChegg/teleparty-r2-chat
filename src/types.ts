@@ -1,4 +1,4 @@
-import { SessionChatMessage } from "./teleparty-websocket-lib/src/SessionChatMessage";
+import { SessionChatMessage } from "teleparty-websocket-lib";
 
 export interface UserProfile {
   nickname: string;

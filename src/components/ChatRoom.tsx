@@ -1,21 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useChatContext } from '../context/ChatContext';
-import { SessionChatMessage } from '../teleparty-websocket-lib/src/SessionChatMessage';
+import { SessionChatMessage } from 'teleparty-websocket-lib';
+import { useToast } from '../context/ToastContext';
 
 const ChatRoom: React.FC = () => {
-  const { chatState, sendMessage, updateTypingStatus, resetChat, anyoneTyping } = useChatContext();
+  const { chatState, sendMessage, updateTypingStatus, resetChat, anyoneTyping, userList } = useChatContext();
+  const toast = useToast();
   const [messageInput, setMessageInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    // Scroll to bottom when messages change
     scrollToBottom();
   }, [chatState.messages]);
 
+
   useEffect(() => {
-    // Cleanup typing timeout on unmount
     return () => {
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
@@ -30,18 +31,15 @@ const ChatRoom: React.FC = () => {
   const handleMessageChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setMessageInput(e.target.value);
     
-    // Handle typing indicator
     if (!isTyping && e.target.value.trim()) {
       setIsTyping(true);
       updateTypingStatus(true);
     }
     
-    // Reset typing timeout
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
     
-    // Set timeout to clear typing status
     typingTimeoutRef.current = setTimeout(() => {
       setIsTyping(false);
       updateTypingStatus(false);
@@ -54,7 +52,6 @@ const ChatRoom: React.FC = () => {
     sendMessage(messageInput.trim());
     setMessageInput('');
     
-    // Clear typing status
     setIsTyping(false);
     updateTypingStatus(false);
     if (typingTimeoutRef.current) {
@@ -81,7 +78,7 @@ const ChatRoom: React.FC = () => {
         className={`mb-4 ${message.isSystemMessage ? 'text-center' : ''}`}
       >
         {message.isSystemMessage ? (
-          <div className="inline-block py-1 px-3 bg-gray-200 rounded-lg text-gray-600 text-sm">
+          <div className="inline-block px-3 py-1 text-sm text-gray-600 bg-gray-200 rounded-lg">
             {message.body}
           </div>
         ) : (
@@ -90,24 +87,24 @@ const ChatRoom: React.FC = () => {
               <img 
                 src={message.userIcon} 
                 alt={message.userNickname || 'User'} 
-                className="w-8 h-8 rounded-full mr-2" 
+                className="w-8 h-8 mr-2 rounded-full" 
               />
             ) : (
-              <div className="w-8 h-8 rounded-full bg-purple-500 text-white flex items-center justify-center mr-2">
+              <div className="flex items-center justify-center w-8 h-8 mr-2 text-white bg-purple-500 rounded-full">
                 {message.userNickname ? message.userNickname.charAt(0).toUpperCase() : '?'}
               </div>
             )}
             
             <div className="flex-1">
               <div className="flex items-baseline">
-                <span className="font-medium text-purple-700 mr-2">
+                <span className="mr-2 font-medium text-purple-700">
                   {message.userNickname || 'Anonymous'}
                 </span>
                 <span className="text-xs text-gray-500">
                   {formatTimestamp(message.timestamp)}
                 </span>
               </div>
-              <div className="mt-1 p-2 bg-purple-50 rounded-lg text-gray-800">
+              <div className="p-2 mt-1 text-gray-800 rounded-lg bg-purple-50">
                 {message.body}
               </div>
             </div>
@@ -118,19 +115,36 @@ const ChatRoom: React.FC = () => {
   };
 
   const handleLeaveRoom = () => {
+    toast.showInfo('You left the room');
     resetChat();
   };
 
+  const getTypingUsersText = () => {
+    if (!chatState.usersTyping.length) return "";
+    
+    const typingUserNicknames = chatState.usersTyping
+      .map(socketId => {
+        const user = userList.find(u => u.socketConnectionId === socketId);
+        return user?.userSettings?.userNickname || 'Someone';
+      })
+      .filter(Boolean);
+    
+    if (typingUserNicknames.length === 0) return "Someone is typing...";
+    if (typingUserNicknames.length === 1) return `${typingUserNicknames[0]} is typing...`;
+    if (typingUserNicknames.length === 2) return `${typingUserNicknames[0]} and ${typingUserNicknames[1]} are typing...`;
+    return `${typingUserNicknames.length} people are typing...`;
+  };
+
   return (
-    <div className="flex flex-col h-screen max-w-4xl mx-auto bg-white rounded-lg shadow-md overflow-hidden">
+    <div className="flex flex-col h-[80vh] max-w-4xl mx-auto overflow-hidden bg-white rounded-lg shadow-md">
       {/* Chat Header */}
-      <div className="p-4 bg-purple-600 text-white flex justify-between items-center">
+      <div className="flex items-center justify-between p-4 text-white bg-purple-600">
         <h2 className="text-xl font-bold">
           Room: {chatState.roomId}
         </h2>
         <button 
           onClick={handleLeaveRoom}
-          className="px-3 py-1 bg-white text-purple-600 rounded hover:bg-purple-100 transition-colors"
+          className="px-3 py-1 text-purple-600 transition-colors bg-white rounded hover:bg-purple-100"
         >
           Leave Room
         </button>
@@ -139,7 +153,7 @@ const ChatRoom: React.FC = () => {
       {/* Messages Container */}
       <div className="flex-1 p-4 overflow-y-auto bg-gray-50">
         {chatState.messages.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-gray-500">
+          <div className="flex items-center justify-center h-full text-gray-500">
             No messages yet. Start the conversation!
           </div>
         ) : (
@@ -152,8 +166,8 @@ const ChatRoom: React.FC = () => {
       
       {/* Typing Indicator */}
       {anyoneTyping && (
-        <div className="px-4 py-2 text-sm text-gray-600 italic bg-gray-100">
-          Someone is typing...
+        <div className="px-4 py-2 text-sm italic text-gray-600 bg-gray-100">
+          {getTypingUsersText()}
         </div>
       )}
       
@@ -165,13 +179,13 @@ const ChatRoom: React.FC = () => {
             onChange={handleMessageChange}
             onKeyDown={handleKeyDown}
             placeholder="Type a message..."
-            className="flex-1 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+            className="flex-1 p-2 border border-gray-300 rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-purple-500"
             rows={2}
           />
           <button
             onClick={handleSendMessage}
             disabled={!messageInput.trim()}
-            className="px-4 py-2 bg-purple-600 text-white font-medium rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50"
+            className="px-4 py-2 font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50"
           >
             Send
           </button>

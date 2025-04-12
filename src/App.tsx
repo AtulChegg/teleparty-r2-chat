@@ -1,19 +1,21 @@
-import React from 'react';
 import { ChatProvider } from './context/ChatContext';
+import { ToastProvider } from './context/ToastContext';
 import ChatContainer from './components/ChatContainer';
 
 function App() {
   return (
-    <div className="min-h-screen bg-gray-100 py-8">
-      <header className="text-center mb-8">
+    <div className="min-h-screen py-8 bg-gray-100">
+      <header className="mb-8 text-center">
         <h1 className="text-3xl font-bold text-purple-800">Teleparty Chat</h1>
         <p className="text-gray-600">Real-time chat powered by Teleparty WebSockets</p>
       </header>
       
       <main>
-        <ChatProvider>
-          <ChatContainer />
-        </ChatProvider>
+        <ToastProvider>
+          <ChatProvider>
+            <ChatContainer />
+          </ChatProvider>
+        </ToastProvider>
       </main>
     </div>
   );

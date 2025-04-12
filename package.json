@@ -14,8 +14,10 @@
     "@types/react-dom": "^19.1.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-hot-toast": "^2.5.2",
     "react-scripts": "5.0.1",
     "tailwindcss": "^3.4.1",
+    "teleparty-websocket-lib": "github:watchparty-org/teleparty-WebSocket-lib",
     "typescript": "^4.9.5"
   },
   "scripts": {

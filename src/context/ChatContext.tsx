@@ -1,12 +1,24 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { TelepartyClient } from '../teleparty-websocket-lib/src/TelepartyClient';
-import { SocketEventHandler } from '../teleparty-websocket-lib/src/SocketEventHandler';
-import { SocketMessageTypes } from '../teleparty-websocket-lib/src/SocketMessageTypes';
-import { SessionChatMessage } from '../teleparty-websocket-lib/src/SessionChatMessage';
-import { MessageList } from '../teleparty-websocket-lib/src/MessageList';
+import { TelepartyClient } from 'teleparty-websocket-lib';
+import { SocketEventHandler } from 'teleparty-websocket-lib';
+import { SocketMessageTypes } from 'teleparty-websocket-lib';
+import { SessionChatMessage } from 'teleparty-websocket-lib';
+import { MessageList } from 'teleparty-websocket-lib';
 import { ChatRoomState, UserProfile } from '../types';
+import { useToast } from './ToastContext';
+// Define an interface for the server user object structure
+export interface ServerUserObject {
+  socketConnectionId: string;
+  permId: string;
+  isHost: string;
+  firebaseUid: string;
+  userSettings: {
+    userNickname: string;
+    userIcon?: string;
+  };
+  isCloudPlayer: string;
+}
 
-// Define the SocketMessage interface locally
 interface SocketMessage {
   type: string;
   data: any;
@@ -24,6 +36,7 @@ interface ChatContextType {
   updateTypingStatus: (isTyping: boolean) => void;
   resetChat: () => void;
   anyoneTyping: boolean;
+  userList: ServerUserObject[];
 }
 
 const defaultChatState: ChatRoomState = {
@@ -40,18 +53,17 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [chatState, setChatState] = useState<ChatRoomState>(defaultChatState);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [anyoneTyping, setAnyoneTyping] = useState<boolean>(false);
-
+  const [userList, setUserList] = useState<ServerUserObject[]>([]);
+  const toast = useToast();
   useEffect(() => {
-    // Initialize the client when the component mounts
     const eventHandler: SocketEventHandler = {
       onConnectionReady: () => {
-        console.log('Connection established');
+        toast.showSuccess('Connected to chat server');
         setChatState(prev => ({ ...prev, isConnected: true }));
       },
       onClose: () => {
-        console.log('Socket closed');
+        toast.showError('Disconnected from chat server, please refresh the page');
         setChatState(prev => ({ ...prev, isConnected: false }));
-        // You could display a message to the user here
       },
       onMessage: (message: SocketMessage) => {
         handleIncomingMessage(message);
@@ -60,18 +72,17 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const newClient = new TelepartyClient(eventHandler);
     setClient(newClient);
-
-    return () => {
-      // Clean up logic if needed
-    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleIncomingMessage = (message: SocketMessage) => {
     const { type, data } = message;
-
     switch (type) {
       case SocketMessageTypes.SEND_MESSAGE:
         const chatMessage = data as SessionChatMessage;
+        if(chatMessage.isSystemMessage){
+          chatMessage.body = `${chatMessage?.userNickname} ${chatMessage.body}`;
+        }
         setChatState(prev => ({
           ...prev,
           messages: [...prev.messages, chatMessage]
@@ -84,10 +95,11 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           usersTyping: data.usersTyping || []
         }));
         break;
+      case "userList":
+        setUserList(data);
+        break;
       default:
-        // Handle other message types if needed
         if (data && data.messages) {
-          // Handle message history (optional functionality)
           const messageList = data as MessageList;
           setChatState(prev => ({
             ...prev,
@@ -109,23 +121,34 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setChatState(prev => ({ ...prev, roomId }));
       return roomId;
     } catch (error) {
+      toast.showError('Error creating room, please try again');
       console.error('Error creating room:', error);
       return null;
     }
   };
 
-  const joinRoom = (roomId: string) => {
+  const joinRoom = async (roomId: string) => {
     if (!client || !userProfile) return;
-    
     try {
-      client.joinChatRoom(
-        userProfile.nickname,
-        roomId,
-        userProfile.userIcon
-      );
-      setChatState(prev => ({ ...prev, roomId }));
+        const messageList = await client.joinChatRoom(
+            userProfile.nickname,
+            roomId,
+            userProfile.userIcon
+        );
+        messageList.messages.forEach(message => {
+            if(message.isSystemMessage){
+                message.body = `${message?.userNickname} ${message.body}`;
+            }
+        });
+        
+        setChatState(prev => ({ 
+            ...prev, 
+            roomId,
+            messages: messageList.messages || []
+        }));
     } catch (error) {
-      console.error('Error joining room:', error);
+        toast.showError('Error joining room, please try again');
+        console.error('Error joining room:', error);
     }
   };
 
@@ -137,6 +160,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         body: message
       });
     } catch (error) {
+      toast.showError('Error sending message, please try again');
       console.error('Error sending message:', error);
     }
   };
@@ -149,6 +173,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         typing: isTyping
       });
     } catch (error) {
+      toast.showError('Error updating typing status, please try again');
       console.error('Error updating typing status:', error);
     }
   };
@@ -169,7 +194,8 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         sendMessage,
         updateTypingStatus,
         resetChat,
-        anyoneTyping
+        anyoneTyping,
+        userList
       }}
     >
       {children}
