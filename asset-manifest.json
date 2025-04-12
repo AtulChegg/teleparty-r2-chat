@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/teleparty-r2-chat/static/css/main.4fe8bda2.css",
+    "main.js": "/teleparty-r2-chat/static/js/main.0070ddad.js",
+    "index.html": "/teleparty-r2-chat/index.html",
+    "main.4fe8bda2.css.map": "/teleparty-r2-chat/static/css/main.4fe8bda2.css.map",
+    "main.0070ddad.js.map": "/teleparty-r2-chat/static/js/main.0070ddad.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.4fe8bda2.css",
+    "static/js/main.0070ddad.js"
+  ]
+}
