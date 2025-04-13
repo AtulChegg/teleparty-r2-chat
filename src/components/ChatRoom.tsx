@@ -4,7 +4,7 @@ import { SessionChatMessage } from 'teleparty-websocket-lib';
 import { useToast } from '../context/ToastContext';
 
 const ChatRoom: React.FC = () => {
-  const { chatState, sendMessage, updateTypingStatus, resetChat, anyoneTyping, userList } = useChatContext();
+  const { chatState, sendMessage, updateTypingStatus, resetChat, userList, userProfile } = useChatContext();
   const toast = useToast();
   const [messageInput, setMessageInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -114,26 +114,40 @@ const ChatRoom: React.FC = () => {
     );
   };
 
-  const handleLeaveRoom = () => {
-    toast.showInfo('You left the room');
-    resetChat();
+  const handleLeaveRoom = async () => {
+    try {
+      toast.showInfo('Leaving the room...');
+      await resetChat();
+    } catch (error) {
+      console.error('Error leaving room:', error);
+      toast.showError('Error leaving room. Please try again.');
+    }
   };
 
   const getTypingUsersText = () => {
     if (!chatState.usersTyping.length) return "";
     
-    const typingUserNicknames = chatState.usersTyping
+    const filteredTypingUsers = chatState.usersTyping.filter(socketId => {
+      const user = userList.find(u => u.socketConnectionId === socketId);
+      return user && user.userSettings.userNickname !== userProfile?.nickname;
+    });
+    
+    if (filteredTypingUsers.length === 0) return "";
+    
+    const typingUserNicknames = filteredTypingUsers
       .map(socketId => {
         const user = userList.find(u => u.socketConnectionId === socketId);
         return user?.userSettings?.userNickname || 'Someone';
       })
       .filter(Boolean);
     
-    if (typingUserNicknames.length === 0) return "Someone is typing...";
+    if (typingUserNicknames.length === 0) return "";
     if (typingUserNicknames.length === 1) return `${typingUserNicknames[0]} is typing...`;
     if (typingUserNicknames.length === 2) return `${typingUserNicknames[0]} and ${typingUserNicknames[1]} are typing...`;
     return `${typingUserNicknames.length} people are typing...`;
   };
+  
+  const otherUsersTyping = getTypingUsersText().length > 0;
 
   return (
     <div className="flex flex-col h-[80vh] max-w-4xl mx-auto overflow-hidden bg-white rounded-lg shadow-md">
@@ -165,7 +179,7 @@ const ChatRoom: React.FC = () => {
       </div>
       
       {/* Typing Indicator */}
-      {anyoneTyping && (
+      {otherUsersTyping && (
         <div className="px-4 py-2 text-sm italic text-gray-600 bg-gray-100">
           {getTypingUsersText()}
         </div>

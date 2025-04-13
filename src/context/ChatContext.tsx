@@ -1,12 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { TelepartyClient } from 'teleparty-websocket-lib';
 import { SocketEventHandler } from 'teleparty-websocket-lib';
 import { SocketMessageTypes } from 'teleparty-websocket-lib';
 import { SessionChatMessage } from 'teleparty-websocket-lib';
 import { MessageList } from 'teleparty-websocket-lib';
 import { ChatRoomState, UserProfile } from '../types';
 import { useToast } from './ToastContext';
-// Define an interface for the server user object structure
+import { EnhancedTelepartyClient } from '../services/EnhancedTelepartyClient';
+
 export interface ServerUserObject {
   socketConnectionId: string;
   permId: string;
@@ -26,7 +26,7 @@ interface SocketMessage {
 }
 
 interface ChatContextType {
-  client: TelepartyClient | null;
+  client: EnhancedTelepartyClient | null;
   chatState: ChatRoomState;
   userProfile: UserProfile | null;
   setUserProfile: (profile: UserProfile) => void;
@@ -34,7 +34,7 @@ interface ChatContextType {
   joinRoom: (roomId: string) => void;
   sendMessage: (message: string) => void;
   updateTypingStatus: (isTyping: boolean) => void;
-  resetChat: () => void;
+  resetChat: () => Promise<void>;
   anyoneTyping: boolean;
   userList: ServerUserObject[];
 }
@@ -46,15 +46,61 @@ const defaultChatState: ChatRoomState = {
   usersTyping: []
 };
 
+const USER_PROFILE_KEY = 'teleparty_user_profile';
+const ROOM_ID_KEY = 'teleparty_room_id';
+const MESSAGES_KEY = 'teleparty_messages';
+
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [client, setClient] = useState<TelepartyClient | null>(null);
-  const [chatState, setChatState] = useState<ChatRoomState>(defaultChatState);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [client, setClient] = useState<EnhancedTelepartyClient | null>(null);
+  const [chatState, setChatState] = useState<ChatRoomState>(() => {
+      
+    const savedRoomId = localStorage.getItem(ROOM_ID_KEY);
+    const savedMessages = localStorage.getItem(MESSAGES_KEY);
+    
+    return {
+      ...defaultChatState,
+      roomId: savedRoomId,
+      messages: savedMessages ? JSON.parse(savedMessages) : []
+    };
+  });
+  
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(() => {
+    const savedProfile = localStorage.getItem(USER_PROFILE_KEY);
+    return savedProfile ? JSON.parse(savedProfile) : null;
+  });
+  
   const [anyoneTyping, setAnyoneTyping] = useState<boolean>(false);
   const [userList, setUserList] = useState<ServerUserObject[]>([]);
   const toast = useToast();
+  
+  useEffect(() => {
+    if (userProfile) {
+      localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(userProfile));
+    }
+  }, [userProfile]);
+  
+  useEffect(() => {
+    if (chatState.roomId) {
+      localStorage.setItem(ROOM_ID_KEY, chatState.roomId);
+    } else {
+      localStorage.removeItem(ROOM_ID_KEY);
+    }
+  }, [chatState.roomId]);
+  
+  useEffect(() => {
+    if (chatState.messages.length > 0) {
+      localStorage.setItem(MESSAGES_KEY, JSON.stringify(chatState.messages));
+    }
+  }, [chatState.messages]);
+  
+  useEffect(() => {
+    if (!chatState.roomId) {
+      localStorage.removeItem(MESSAGES_KEY);
+    }
+  }, [chatState.roomId]);
+  
   useEffect(() => {
     const eventHandler: SocketEventHandler = {
       onConnectionReady: () => {
@@ -62,7 +108,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setChatState(prev => ({ ...prev, isConnected: true }));
       },
       onClose: () => {
-        toast.showError('Disconnected from chat server, please refresh the page');
+        toast.showError('Disconnected from chat server');
         setChatState(prev => ({ ...prev, isConnected: false }));
       },
       onMessage: (message: SocketMessage) => {
@@ -70,10 +116,27 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     };
 
-    const newClient = new TelepartyClient(eventHandler);
+    const newClient = new EnhancedTelepartyClient(eventHandler);
     setClient(newClient);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    
+    return () => {
+      if (newClient) {
+        newClient.teardown();
+      }
+    };
+    // eslint-disable-next-line
   }, []);
+  
+  useEffect(() => {
+    if (client && userProfile) {
+      const savedRoomId = localStorage.getItem(ROOM_ID_KEY);
+      
+      if (savedRoomId) {
+        joinRoom(savedRoomId);
+      }
+    }
+    // eslint-disable-next-line
+  }, [client, userProfile]);
 
   const handleIncomingMessage = (message: SocketMessage) => {
     const { type, data } = message;
@@ -101,10 +164,31 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       default:
         if (data && data.messages) {
           const messageList = data as MessageList;
-          setChatState(prev => ({
-            ...prev,
-            messages: messageList.messages
-          }));
+          
+          setChatState(prev => {
+            const existingMessagesMap = new Map();
+            prev.messages.forEach(msg => {
+              existingMessagesMap.set(`${msg.timestamp}-${msg.body}`, msg);
+            });
+            
+            const mergedMessages = [...prev.messages];
+            messageList.messages.forEach(newMsg => {
+              const key = `${newMsg.timestamp}-${newMsg.body}`;
+              if (!existingMessagesMap.has(key)) {
+                if (newMsg.isSystemMessage) {
+                  newMsg.body = `${newMsg?.userNickname} ${newMsg.body}`;
+                }
+                mergedMessages.push(newMsg);
+              }
+            });
+            
+            mergedMessages.sort((a, b) => a.timestamp - b.timestamp);
+            
+            return {
+              ...prev,
+              messages: mergedMessages
+            };
+          });
         }
         break;
     }
@@ -128,24 +212,55 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const joinRoom = async (roomId: string) => {
-    if (!client || !userProfile) return;
+    if (!client || !userProfile) {
+      console.error("Cannot join room - client or user profile is missing");
+      return;
+    }
     try {
+        if (chatState.roomId !== roomId) {
+          localStorage.removeItem(MESSAGES_KEY);
+        } 
+        
         const messageList = await client.joinChatRoom(
             userProfile.nickname,
             roomId,
             userProfile.userIcon
         );
+        
         messageList.messages.forEach(message => {
             if(message.isSystemMessage){
                 message.body = `${message?.userNickname} ${message.body}`;
             }
         });
         
-        setChatState(prev => ({ 
-            ...prev, 
-            roomId,
-            messages: messageList.messages || []
-        }));
+        if (chatState.messages.length > 0) {
+          const existingMessagesMap = new Map();
+          chatState.messages.forEach(msg => {
+            existingMessagesMap.set(`${msg.timestamp}-${msg.body}`, msg);
+          });
+          
+          const mergedMessages = [...chatState.messages];
+          messageList.messages.forEach(newMsg => {
+            const key = `${newMsg.timestamp}-${newMsg.body}`;
+            if (!existingMessagesMap.has(key)) {
+              mergedMessages.push(newMsg);
+            }
+          });
+          
+          mergedMessages.sort((a, b) => a.timestamp - b.timestamp);
+          
+          setChatState(prev => ({ 
+              ...prev, 
+              roomId,
+              messages: mergedMessages
+          }));
+        } else {
+          setChatState(prev => ({ 
+              ...prev, 
+              roomId,
+              messages: messageList.messages || []
+          }));
+        }
     } catch (error) {
         toast.showError('Error joining room, please try again');
         console.error('Error joining room:', error);
@@ -178,8 +293,44 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const resetChat = () => {
+  const resetChat = async () => {
+    if (client && chatState.roomId) {
+      try {
+        const success = await client.leaveChatRoom();
+        if (success) {
+          toast.showSuccess('Successfully left the room');
+        }
+      } catch (error) {
+        toast.showError('Error leaving room, please try again');
+        console.error('Error leaving room:', error);
+      }
+    }
+    
     setChatState(defaultChatState);
+    
+    localStorage.removeItem(ROOM_ID_KEY);
+    localStorage.removeItem(MESSAGES_KEY);
+    
+    if (client) {
+      client.teardown();
+      
+      const eventHandler: SocketEventHandler = {
+        onConnectionReady: () => {
+          toast.showSuccess('Connected to chat server');
+          setChatState(prev => ({ ...prev, isConnected: true }));
+        },
+        onClose: () => {
+          toast.showError('Disconnected from chat server');
+          setChatState(prev => ({ ...prev, isConnected: false }));
+        },
+        onMessage: (message: SocketMessage) => {
+          handleIncomingMessage(message);
+        }
+      };
+  
+      const newClient = new EnhancedTelepartyClient(eventHandler);
+      setClient(newClient);
+    }
   };
 
   return (
