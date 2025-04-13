@@ -22,8 +22,12 @@
   },
   "scripts": {
     "start": "react-scripts start",
+    "start:dev": "REACT_APP_DEBUG=true NODE_ENV=development react-scripts start",
     "build": "react-scripts build",
+    "build:prod": "REACT_APP_DEBUG=false NODE_ENV=production react-scripts build",
     "test": "react-scripts test",
+    "lint": "eslint src/**/*.{ts,tsx}",
+    "lint:fix": "eslint src/**/*.{ts,tsx} --fix",
     "eject": "react-scripts eject",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d build"

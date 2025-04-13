@@ -1,5 +1,6 @@
 import React, { useState, ChangeEvent } from 'react';
 import { UserProfile } from '../types';
+import { useToast } from '../context/ToastContext';
 
 interface ProfileSetupProps {
   onProfileSubmit: (profile: UserProfile) => void;
@@ -8,17 +9,30 @@ interface ProfileSetupProps {
 const ProfileSetup: React.FC<ProfileSetupProps> = ({ onProfileSubmit }) => {
   const [nickname, setNickname] = useState('');
   const [userIcon, setUserIcon] = useState<string | undefined>(undefined);
+  const toast = useToast();
 
   const handleNicknameChange = (e: ChangeEvent<HTMLInputElement>) => {
+    console.log(`[ProfileSetup] Nickname changed: ${e.target.value}`);
     setNickname(e.target.value);
   };
 
   const handleIconChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      console.log(`[ProfileSetup] Profile image selected: ${file.name} (${Math.round(file.size / 1024)} KB)`);
+      
+      if (file.size > 1024 * 1024) {
+        toast.showWarning('Image is larger than 1MB. Consider using a smaller image for better performance.');
+      }
+      
       const reader = new FileReader();
       reader.onloadend = () => {
+        console.log(`[ProfileSetup] Image loaded successfully`);
         setUserIcon(reader.result as string);
+      };
+      reader.onerror = () => {
+        console.error(`[ProfileSetup] Error reading image file`);
+        toast.showError('Failed to read image file. Please try another image.');
       };
       reader.readAsDataURL(file);
     }
@@ -27,7 +41,12 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ onProfileSubmit }) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (nickname.trim()) {
+      console.log(`[ProfileSetup] Profile submitted with nickname: ${nickname}`);
+      toast.showSuccess(`Profile set: ${nickname}`);
       onProfileSubmit({ nickname, userIcon });
+    } else {
+      console.log(`[ProfileSetup] Attempted to submit empty nickname`);
+      toast.showError('Nickname cannot be empty');
     }
   };
 

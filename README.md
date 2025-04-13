@@ -12,14 +12,19 @@ A real-time chat application using WebSockets, powered by the Teleparty WebSocke
 - **Typing Indicators**: Shows exactly which users are typing messages in real-time
 - **System Messages**: Notifications when users join or leave the chat
 - **Message History**: Automatically loads all previous messages when joining a room
-- **Toast Notifications**: Non-intrusive notifications for important events:
-  - Connection status (connected/disconnected)
+- **Enhanced Toast Notifications**: Comprehensive feedback for all user interactions:
+  - Connection status changes (connected/disconnected/reconnecting)
   - Room creation and joining success/failures
-  - Error messages
+  - Message sending status including offline queuing
+  - Error messages with detailed context
   - User join/leave notifications
+  - Profile updates
 - **Responsive Design**: Works on desktop and mobile devices
 - **User List**: Keeps track of all users in the room
 - **Customizable Profiles**: User nicknames and optional profile images
+- **Offline Support**: Messages are queued when offline and sent when reconnected
+- **Automatic Reconnection**: Seamlessly handles connection drops
+- **Message Persistence**: Retains messages even after page refresh
 
 ## Technologies Used
 
@@ -85,17 +90,19 @@ Open [http://localhost:3000](http://localhost:3000) in your browser to see the a
 
 ```plaintext
 src/
-├── components/           # React components
-│   ├── ChatContainer.tsx       # Main container component
-│   ├── ChatRoom.tsx            # Chat room component with messages and input
-│   ├── JoinCreateRoom.tsx      # Component for joining or creating rooms
-│   └── ProfileSetup.tsx        # Component for setting user nickname and icon
-├── context/              # React context
-│   ├── ChatContext.tsx         # Context for managing chat state
-│   └── ToastContext.tsx        # Context for toast notifications
-├── types.ts              # TypeScript interfaces and types
-├── App.tsx               # Main App component
-└── index.tsx             # Entry point
+├── components/            # React components
+│   ├── ChatContainer.tsx  # Main container component
+│   ├── ChatRoom.tsx       # Chat room component with messages and input
+│   ├── JoinCreateRoom.tsx # Component for joining or creating rooms
+│   └── ProfileSetup.tsx   # Component for setting user nickname and icon
+├── context/               # React context
+│   ├── ChatContext.tsx    # Context for managing chat state
+│   └── ToastContext.tsx   # Context for toast notifications
+├── services/              # Services
+│   └── EnhancedTelepartyClient.ts  # Enhanced WebSocket client
+├── types.ts               # TypeScript interfaces and types
+├── App.tsx                # Main App component
+└── index.tsx              # Entry point
 ```
 
 ## Features in Detail
@@ -104,29 +111,52 @@ src/
 
 The application uses WebSockets to provide real-time bidirectional communication. Messages are delivered instantly, and users can see when others are typing.
 
-### Toast Notifications
+### Enhanced Reconnection Logic
 
-Toast notifications provide feedback for important events:
+The application includes robust reconnection handling:
 
-- Success toasts for successful operations (green)
-- Error toasts for failed operations (red)
-- Info toasts for informational messages (blue)
-- Warning toasts for warnings (orange)
+- Automatic reconnection with exponential backoff
+- Seamless room rejoining after reconnection
+- Message queue preservation during disconnection
+- Toast notifications to keep users informed of connection status
+- Keeps messages in sync between local storage and server
 
-### User Presence
+### Comprehensive Toast Notifications
 
-The application keeps track of who is online and shows notifications when users join or leave the chat room.
+The application uses a hierarchical toast system to provide feedback:
 
-### Message Types
+- **Success toasts** (green): Successful operations like joining rooms, creating rooms, or reconnecting
+- **Error toasts** (red): Failed operations with specific error details
+- **Info toasts** (blue): Informational messages like user joining/leaving, message delivery status
+- **Warning toasts** (orange): Warnings like connection issues, large image uploads
 
-The chat supports different types of messages:
+### Detailed Logging
 
-- Regular user messages
-- System messages (join/leave notifications)
+The application includes comprehensive logging for debugging:
 
-### Typing Indicators
+- Component-based log prefixes (e.g., `[ChatContext]`, `[EnhancedClient]`, `[ChatRoom]`)
+- Lifecycle event logging (mount, unmount, reconnect)
+- Communication event logging (message send/receive, connection status)
+- Error logging with stack traces
+- State change logging (room joining, message updates)
 
-When users are typing, the application shows exactly which users are currently typing, with different messages based on the number of people typing.
+### Persistent State
+
+User data persists across page reloads:
+
+- User profiles are saved in localStorage
+- Room IDs are preserved
+- Message history is stored locally and merged with server data
+- Automatic room rejoining after page refresh
+
+### Offline Support
+
+The application handles offline scenarios gracefully:
+
+- Visual indicators when offline
+- Queuing messages for sending when connection is restored
+- Toast notifications about connection status
+- Automatic reconnection attempts
 
 ## License
 
